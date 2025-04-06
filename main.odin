@@ -489,6 +489,98 @@ shutdown :: proc(exit_code: int = 1) {
     os.exit(exit_code)
 }
 
+
+render_all_tiles :: proc() {
+    tiles_per_row := 20  // 160 pixels / 8 pixels per tile
+    
+    for tile_num in 0..<360 {
+        tile_x := tile_num % tiles_per_row
+        tile_y := tile_num / tiles_per_row
+        
+        for x in 0..<8 {
+            for y in 0..<8 {
+                // Calculate screen positions
+                screen_x := tile_x * 8 + x
+                screen_y := tile_y * 8 + y
+                
+                // Get color and render
+                color_index := Tile_Map[tile_num][x][y]
+                frame_buffer[screen_y][screen_x] = color_palette[color_index]
+            }
+        }
+    }
+}
+
+
+render_tile_map_line :: proc() {
+    // Check LCD enable
+    lcdc := read_byte(0xFF40)
+    if !test_bit(7, lcdc) do return
+
+    currentline := read_byte(0xFF44)
+    if currentline >= SCREEN_HEIGHT do return
+
+    // Get scroll/window registers
+    scroll_y := read_byte(0xFF42)
+    scroll_x := read_byte(0xFF43)
+    window_y := read_byte(0xFF4A)
+    window_x := read_byte(0xFF4B)
+
+    // Determine addressing mode
+    unsig := test_bit(4, lcdc)  // Unsigned tile numbers
+    windowing_enabled := test_bit(5, lcdc)
+
+    // Determine tilemap locations
+    bg_location := test_bit(3, lcdc) ? 0x9C00 : 0x9800
+    win_location := test_bit(6, lcdc) ? 0x9C00 : 0x9800
+
+    // Render background
+    y_pos := currentline + scroll_y
+    tile_row := (y_pos / 8) % 32 * 32
+
+    pixel: u8 = 0
+    for pixel < 160 {
+        // Check window condition
+        if windowing_enabled && pixel >= window_x && currentline >= window_y {
+            break
+        }
+
+        x_pos := pixel + scroll_x
+        tile_col := (x_pos / 8) % 32
+
+        // Get tile number with signed/unsigned handling
+        tile_num := get_tile_number(bg_location + u16(tile_row + tile_col), unsig)
+
+        // Render pixel
+        frame_buffer[currentline][pixel] = color_palette[
+            Tile_Map[tile_num][x_pos % 8][y_pos % 8]
+        ]
+        pixel += 1
+    }
+
+    // Render window if enabled
+    if windowing_enabled && currentline >= window_y {
+        y_pos = currentline - window_y
+        tile_row = (y_pos / 8) * 32
+
+        for pixel < 160 {
+            x_pos := pixel - window_x
+            tile_col := (x_pos / 8) % 32
+
+            tile_num := get_tile_number(win_location + u16(tile_row + tile_col), unsig)
+
+            frame_buffer[currentline][pixel] = color_palette[
+                Tile_Map[tile_num][x_pos % 8][y_pos % 8]
+            ]
+            pixel += 1
+        }
+    }
+}
+
+get_tile_number :: proc(addr: u16, unsigned: bool) -> u16 {
+    tile_num := u16(read_byte(addr))
+    return unsigned ? tile_num : tile_num + 0x100
+}
 main :: proc() {
     rom_data, ok := read_rom("game.gb")
     if !ok {

@@ -552,9 +552,7 @@ render_tile_map_line :: proc() {
         tile_num := get_tile_number(bg_location + u16(tile_row + tile_col), unsig)
 
         // Render pixel
-        frame_buffer[currentline][pixel] = color_palette[
-            Tile_Map[tile_num][x_pos % 8][y_pos % 8]
-        ]
+        frame_buffer[currentline][pixel] = color_palette[Tile_Map[tile_num][x_pos % 8][y_pos % 8]]
         pixel += 1
     }
 
@@ -569,13 +567,142 @@ render_tile_map_line :: proc() {
 
             tile_num := get_tile_number(win_location + u16(tile_row + tile_col), unsig)
 
-            frame_buffer[currentline][pixel] = color_palette[
-                Tile_Map[tile_num][x_pos % 8][y_pos % 8]
-            ]
+            frame_buffer[currentline][pixel] = color_palette[Tile_Map[tile_num][x_pos % 8][y_pos % 8]]
             pixel += 1
         }
     }
 }
+
+render_sprites :: proc() {
+    use8x16 := test_bit(2, read_byte(0xFF40)) != false
+
+    for sprite := 0; sprite < 40; sprite += 1 {
+        index := sprite * 4
+        ypos := read_byte(0xFE00 + u16(index)) - 16
+        xpos := read_byte(0xFE00 + u16(index + 1)) - 8
+        location := read_byte(0xFE00 + u16(index + 2))
+        attributes := read_byte(0xFE00 + u16(index + 3))
+
+        yflip := test_bit(6, attributes)
+        xflip := test_bit(5, attributes)
+
+        if ypos == 0 || xpos == 0 || ypos >= 160 || xpos >= 168 {
+            continue
+        }
+
+        for x := 0; x < 8; x += 1 {
+            for y := 0; y < 8; y += 1 {
+                if Tile_Map[location][abs(8 * int(xflip) - x)][abs(8 * int(yflip) - y)] != 0 {
+                    frame_buffer[(y + ypos) % SCREEN_HEIGHT][(xpos + x) % SCREEN_WIDTH] = 
+                        color_palette[Tile_Map[location][abs(8 * int(xflip) - x)][abs(8 * int(yflip) - y)]]
+                }
+            }
+        }
+    }
+}
+
+handle_input :: proc() {
+    if event.type == sdl2.EventType.KEYDOWN {
+        key := -1
+        switch event.key.keysym.sym {
+        case sdl2.Keycode.TAB:
+            key = 4
+        case sdl2.Keycode.LCTRL:
+            key = 5
+        case sdl2.Keycode.RETURN:
+            key = 7
+        case sdl2.Keycode.BACKSLASH:
+            key = 6
+        case sdl2.Keycode.RIGHT:
+            key = 0
+        case sdl2.Keycode.LEFT:
+            key = 1
+        case sdl2.Keycode.UP:
+            key = 2
+        case sdl2.Keycode.DOWN:
+            key = 3
+        case:
+            key = -1
+        }
+
+        if key != -1 {
+            key_press(key)
+        }
+    }
+    else if event.type == sdl2.EventType.KEYUP {
+        key := -1
+        switch event.key.keysym.sym {
+        case sdl2.Keycode.TAB:
+            key = 4
+        case sdl2.Keycode.LCTRL:
+            key = 5
+        case sdl2.Keycode.RETURN:
+            key = 7
+        case sdl2.Keycode.BACKSLASH:
+            key = 6
+        case sdl2.Keycode.RIGHT:
+            key = 0
+        case sdl2.Keycode.LEFT:
+            key = 1
+        case sdl2.Keycode.UP:
+            key = 2
+        case sdl2.Keycode.DOWN:
+            key = 3
+        case:
+            key = -1
+        }
+
+        if key != -1 {
+            key_release(key)
+        }
+    }
+}
+key_press :: proc(key: int) {
+    previouslyUnset := false
+
+    if !test_bit(u8(key), joypad_state) {
+        previouslyUnset = true
+    }
+
+    joypad_state = res(u8(key), joypad_state)
+
+    // Standard or directional button?
+    button := key > 3
+
+    // Check which keys game is interested in
+    request_interrupt := false
+    if button && !test_bit(5, read_byte(0xFF00)) {
+        request_interrupt = true
+    } else if !button && !test_bit(4, read_byte(0xFF00)) {
+        request_interrupt = true
+    }
+
+    if request_interrupt && !previouslyUnset {
+        set_interrupt(4)
+    }
+}
+
+set_interrupt :: proc(interrupt: u8) {
+    current := read_byte(0xFF0F)
+    modified := set_bit(interrupt, current)
+    write_byte(modified, 0xFF0F)
+}
+key_release :: proc(key: int) {
+    joypad_state = set(u8(key), joypad_state)
+}
+
+// Reset (clear) the specified bit in a number
+res :: proc(bit: u8, number: u8) -> u8 {
+    bitindex := u8(1) << bit
+    return number & (0xFF ~ bitindex)  // Same as XOR in original
+}
+
+// Set the specified bit in a number
+set :: proc(bit: u8, number: u8) -> u8 {
+    bitindex := u8(1) << bit
+    return number | bitindex
+}
+
 
 get_tile_number :: proc(addr: u16, unsigned: bool) -> u16 {
     tile_num := u16(read_byte(addr))
@@ -588,4 +715,37 @@ main :: proc() {
         return
     }
     defer delete(rom_data)
+}
+
+
+Set_Z_Flag:: proc() { 
+    registers.af.f = registers.af.f | 0x80
+}
+
+Set_N_Flag::proc() {
+	registers.af.f = registers.af.f | 0x40
+}
+
+Set_H_Flag::proc() { 
+	registers.af.f = registers.af.f | 0x20
+}
+
+Set_C_Flag::proc() {
+	registers.af.f = registers.af.f | 0x10
+}
+
+Clear_Z_Flag::proc() { 
+	registers.af.f = registers.af.f & 0x7F
+}
+
+Clear_N_Flag::proc() { 
+	registers.af.f = registers.af.f & 0xBF; 
+}
+
+Clear_H_Flag::proc() {
+	registers.af.f = registers.af.f & 0xDF; 
+}
+
+Clear_C_Flag::proc() {
+	registers.af.f = registers.af.f & 0xEF; 
 }

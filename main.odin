@@ -460,6 +460,17 @@ display_buffer :: proc() {
     sdl2.RenderPresent(renderer)
 }
 
+shutdown :: proc(exit_code: int = 1) {
+    // Cleanup SDL resources (safe to call on nil pointers)
+    if texture != nil  do sdl2.DestroyTexture(texture)
+    if renderer != nil do sdl2.DestroyRenderer(renderer)
+    if window != nil   do sdl2.DestroyWindow(window)
+    if icon != nil     do sdl2.FreeSurface(icon)
+    
+    sdl2.Quit()
+    os.exit(exit_code)
+}
+
 main :: proc() {
     rom_data, ok := read_rom("game.gb")
     if !ok {

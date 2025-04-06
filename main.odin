@@ -708,6 +708,8 @@ get_tile_number :: proc(addr: u16, unsigned: bool) -> u16 {
     tile_num := u16(read_byte(addr))
     return unsigned ? tile_num : tile_num + 0x100
 }
+
+
 main :: proc() {
     rom_data, ok := read_rom("game.gb")
     if !ok {
@@ -718,7 +720,7 @@ main :: proc() {
 }
 
 
-Set_Z_Flag:: proc() { 
+Set_Z_Flag::proc() { 
     registers.af.f = registers.af.f | 0x80
 }
 
@@ -749,3 +751,104 @@ Clear_H_Flag::proc() {
 Clear_C_Flag::proc() {
 	registers.af.f = registers.af.f & 0xEF; 
 }
+
+RotByteLeft :: proc(number: u8) -> u8 {
+    carry := number & 0x80
+    number := (number << 1) | (carry >> 7)
+    
+    if carry != 0 {
+        Set_C_Flag()
+    } else {
+        Clear_C_Flag()
+    }
+
+    if number != 0 {
+        Clear_Z_Flag()
+    } else {
+        Set_Z_Flag()
+    }
+
+    Clear_N_Flag()
+    Clear_H_Flag()
+
+    return number
+}
+
+RotByteRight :: proc(number: u8) -> u8 {
+    carry := number & 0x01
+    number := (number >> 1) | (carry << 7)
+    
+    if carry != 0 {
+        Set_C_Flag()
+    } else {
+        Clear_C_Flag()
+    }
+
+    if number != 0 {
+        Clear_Z_Flag()
+    } else {
+        Set_Z_Flag()
+    }
+
+    Clear_N_Flag()
+    Clear_H_Flag()
+
+    return number
+}
+
+Rotate_Right_Carry :: proc(number: u8) -> u8 {
+    carry := number & 0x01
+    number_copy := number
+    number_copy >>= 1  // Shift right 1 bit
+    
+    if (registers.af.f & 0x10) != 0 {  // Check if Carry flag is set
+        number_copy += 0x80
+    }
+
+    if carry != 0 {
+        Set_C_Flag()  // Set Carry flag
+    } else {
+        Clear_C_Flag()
+    }
+
+    if number_copy != 0 {
+        Clear_Z_Flag()  // Set Zero Flag
+    } else {
+        Set_Z_Flag()
+    }
+
+    // Clear other flags
+    Clear_N_Flag()
+    Clear_H_Flag()
+    return number_copy
+}
+
+Rotate_Left_Carry :: proc(number: u8) -> u8 {
+    carry := number & 0x80
+    number_copy := number
+    number_copy <<= 1
+
+
+    if registers.af.f & 0x10 != 0 {
+        number_copy += 1
+    }
+
+    if carry != 0 {
+        Set_C_Flag()
+    } else {
+        Clear_C_Flag()
+    }
+
+    if number_copy != 0 {
+        Clear_Z_Flag()
+    } else {
+        Set_Z_Flag()
+    }
+
+    Clear_N_Flag()
+    Clear_H_Flag()
+
+    return number_copy
+}
+
+

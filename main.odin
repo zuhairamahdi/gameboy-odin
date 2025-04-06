@@ -852,3 +852,84 @@ Rotate_Left_Carry :: proc(number: u8) -> u8 {
 }
 
 
+Shift_Left :: proc(number: u8) -> u8 {
+    if number & 0x80 != 0 {
+        Set_C_Flag()
+    } else {
+        Clear_C_Flag()
+    }
+    number_copy := number
+    number_copy <<= 1
+
+    if number_copy != 0 {
+        Clear_Z_Flag()
+    } else {
+        Set_Z_Flag()
+    }
+
+    Clear_N_Flag()
+    Clear_H_Flag()
+
+    return number_copy
+}
+
+Shift_Right :: proc(number: u8) -> u8 {
+    if number & 0x1 != 0 {
+        Set_C_Flag()
+    } else {
+        Clear_C_Flag()
+    }
+    number_copy := number
+    number_copy >>= 1
+
+    if number_copy != 0 {
+        Clear_Z_Flag()
+    } else {
+        Set_Z_Flag()
+    }
+
+    Clear_N_Flag()
+    Clear_H_Flag()
+
+    return number_copy
+}
+
+Shift_Right_A :: proc(number: u8) -> u8 {
+    if number & 0x1 != 0 {
+        Set_C_Flag()
+    } else {
+        Clear_C_Flag()
+    }
+
+    number_copy := number
+    number_copy = (number_copy >> 1) | (number_copy & 0x80)
+
+    if number_copy != 0 {
+        Clear_Z_Flag()
+    } else {
+        Set_Z_Flag()
+    }
+
+    Clear_N_Flag()
+    Clear_H_Flag()
+
+    return number_copy
+}
+
+
+Swap :: proc(number: u8) -> u8 {
+    number_copy := number
+    number_copy = ((number_copy & 0xf0) >> 4) | ((number_copy & 0x0f) << 4)
+
+    if number_copy != 0 {
+        Clear_Z_Flag()
+    } else {
+        Set_Z_Flag()
+    }
+
+    Clear_H_Flag()
+    Clear_N_Flag()
+    Clear_C_Flag()
+
+    return number_copy
+}

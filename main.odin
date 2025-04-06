@@ -441,6 +441,24 @@ set_bit :: proc(bit: u8, number: u8) -> u8 {
     return number | (1 << bit)
 }
 
+load_tiles :: proc() {
+    location := u16(0x8000)
+    
+    for s in 0..<384 {
+        for rel_y in 0..<8 {
+            lower_byte := read_byte(location + u16(2*rel_y + 16*s))
+            upper_byte := read_byte(location + u16(2*rel_y + 16*s + 1))
+            
+            for rel_x in 0..<8 {
+                bit_mask := u8(1 << u32(7 - rel_x))
+                color_bit0 := (lower_byte & bit_mask) != 0 ? 1 : 0
+                color_bit1 := (upper_byte & bit_mask) != 0 ? 2 : 0
+                Tile_Map[s][rel_x][rel_y] = u8(color_bit0) + u8(color_bit1)
+            }
+        }
+    }
+}
+
 display_buffer :: proc() {
     // Update texture with frame buffer data
     err := sdl2.UpdateTexture(
